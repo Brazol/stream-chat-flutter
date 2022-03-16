@@ -1,20 +1,8 @@
 import 'package:mocktail/mocktail.dart';
-import 'package:stream_chat/src/client/client.dart';
 import 'package:stream_chat/src/core/api/device_api.dart';
-import 'package:stream_chat/src/core/api/requests.dart';
-import 'package:stream_chat/src/core/api/responses.dart';
-import 'package:stream_chat/src/core/error/error.dart';
 import 'package:stream_chat/src/core/http/token.dart';
-import 'package:stream_chat/src/core/models/channel_model.dart';
-import 'package:stream_chat/src/core/models/event.dart';
-import 'package:stream_chat/src/core/models/filter.dart';
-import 'package:stream_chat/src/core/models/message.dart';
-import 'package:stream_chat/src/core/models/own_user.dart';
-import 'package:stream_chat/src/core/models/user.dart';
-import 'package:stream_chat/src/event_type.dart';
-import 'package:stream_chat/src/ws/connection_status.dart';
+import 'package:stream_chat/src/core/models/banned_user.dart';
 import 'package:stream_chat/stream_chat.dart';
-import 'package:test/scaffolding.dart';
 import 'package:test/test.dart';
 
 import '../fakes.dart';
@@ -995,6 +983,36 @@ void main() {
       verifyNoMoreInteractions(api.user);
     });
 
+    test('`.queryBannedUsers`', () async {
+      final bans = List.generate(
+        3,
+        (index) => BannedUser(
+          user: User(id: 'test-user-id-$index'),
+          bannedBy: User(id: 'test-user-id-${index + 1}'),
+        ),
+      );
+
+      const cid = 'message:nice-channel';
+      final filter = Filter.equal('channel_cid', cid);
+
+      when(() => api.moderation.queryBannedUsers(
+            filter: filter,
+            sort: any(named: 'sort'),
+            pagination: any(named: 'pagination'),
+          )).thenAnswer((_) async => QueryBannedUsersResponse()..bans = bans);
+
+      final res = await client.queryBannedUsers(filter: filter);
+      expect(res, isNotNull);
+      expect(res.bans.length, bans.length);
+
+      verify(() => api.moderation.queryBannedUsers(
+            filter: filter,
+            sort: any(named: 'sort'),
+            pagination: any(named: 'pagination'),
+          )).called(1);
+      verifyNoMoreInteractions(api.moderation);
+    });
+
     test('`.search`', () async {
       const cid = 'test-type:test-id';
       final filter = Filter.in_('cid', const [cid]);
@@ -1754,6 +1772,46 @@ void main() {
       verifyNoMoreInteractions(api.user);
     });
 
+    test('`.partialUpdateUser`', () async {
+      const userId = 'test-user-id';
+
+      final set = {'color': 'yellow'};
+      final unset = <String>[];
+
+      final partialUpdateRequest = PartialUpdateUserRequest(
+        id: userId,
+        set: set,
+        unset: unset,
+      );
+
+      final updatedUser = User(
+        id: userId,
+        extraData: {'color': set['color']},
+      );
+
+      when(() => api.user.partialUpdateUsers([partialUpdateRequest]))
+          .thenAnswer(
+        (_) async => UpdateUsersResponse()
+          ..users = {
+            updatedUser.id: updatedUser,
+          },
+      );
+
+      final res = await client.partialUpdateUser(
+        userId,
+        set: set,
+        unset: unset,
+      );
+
+      expect(res, isNotNull);
+      expect(res.users, {updatedUser.id: updatedUser});
+
+      verify(
+        () => api.user.partialUpdateUsers([partialUpdateRequest]),
+      ).called(1);
+      verifyNoMoreInteractions(api.user);
+    });
+
     test('`.banUser`', () async {
       const userId = 'test-user-id';
 
@@ -1938,23 +1996,109 @@ void main() {
       verifyNoMoreInteractions(api.channel);
     });
 
-    test('`.sendReaction`', () async {
-      const messageId = 'test-message-id';
-      const reactionType = 'like';
+    group('`.sendReaction`', () {
+      test('`.sendReaction with default params`', () async {
+        const messageId = 'test-message-id';
+        const reactionType = 'like';
+        const extraData = {'score': 1};
 
-      when(() => api.message.sendReaction(messageId, reactionType))
-          .thenAnswer((_) async => SendReactionResponse()
-            ..message = Message(id: messageId)
-            ..reaction = Reaction(type: reactionType, messageId: messageId));
+        when(() => api.message.sendReaction(
+              messageId,
+              reactionType,
+              extraData: extraData,
+            )).thenAnswer((_) async => SendReactionResponse()
+          ..message = Message(id: messageId)
+          ..reaction = Reaction(type: reactionType, messageId: messageId));
 
-      final res = await client.sendReaction(messageId, reactionType);
-      expect(res, isNotNull);
-      expect(res.message.id, messageId);
-      expect(res.reaction.type, reactionType);
-      expect(res.reaction.messageId, messageId);
+        final res = await client.sendReaction(messageId, reactionType);
+        expect(res, isNotNull);
+        expect(res.message.id, messageId);
+        expect(res.reaction.type, reactionType);
+        expect(res.reaction.messageId, messageId);
 
-      verify(() => api.message.sendReaction(messageId, reactionType)).called(1);
-      verifyNoMoreInteractions(api.message);
+        verify(() => api.message.sendReaction(
+              messageId,
+              reactionType,
+              extraData: extraData,
+            )).called(1);
+        verifyNoMoreInteractions(api.message);
+      });
+
+      test('`.sendReaction with score`', () async {
+        const messageId = 'test-message-id';
+        const reactionType = 'like';
+        const score = 3;
+        const extraData = {'score': score};
+
+        when(() => api.message.sendReaction(
+              messageId,
+              reactionType,
+              extraData: extraData,
+            )).thenAnswer((_) async => SendReactionResponse()
+          ..message = Message(id: messageId)
+          ..reaction = Reaction(
+            type: reactionType,
+            messageId: messageId,
+            score: score,
+          ));
+
+        final res = await client.sendReaction(
+          messageId,
+          reactionType,
+          score: score,
+        );
+        expect(res, isNotNull);
+        expect(res.message.id, messageId);
+        expect(res.reaction.type, reactionType);
+        expect(res.reaction.messageId, messageId);
+        expect(res.reaction.score, score);
+
+        verify(() => api.message.sendReaction(
+              messageId,
+              reactionType,
+              extraData: extraData,
+            )).called(1);
+        verifyNoMoreInteractions(api.message);
+      });
+
+      test('`.sendReaction with score passed in extradata also`', () async {
+        const messageId = 'test-message-id';
+        const reactionType = 'like';
+        const score = 3;
+        const extraDataScore = 5;
+        const extraData = {'score': extraDataScore};
+
+        when(() => api.message.sendReaction(
+              messageId,
+              reactionType,
+              extraData: extraData,
+            )).thenAnswer((_) async => SendReactionResponse()
+          ..message = Message(id: messageId)
+          ..reaction = Reaction(
+            type: reactionType,
+            messageId: messageId,
+            score: extraDataScore,
+          ));
+
+        final res = await client.sendReaction(
+          messageId,
+          reactionType,
+          score: score,
+          extraData: extraData,
+        );
+        expect(res, isNotNull);
+        expect(res.message.id, messageId);
+        expect(res.reaction.type, reactionType);
+        expect(res.reaction.messageId, messageId);
+        expect(res.reaction.score, extraDataScore);
+
+        verify(() => api.message.sendReaction(
+              messageId,
+              reactionType,
+              extraData: extraData,
+            )).called(1);
+        verifyNoMoreInteractions(api.message);
+      });
     });
 
     test('`.deleteReaction`', () async {
@@ -2312,6 +2456,33 @@ void main() {
             set: {'pinned': false},
           )).called(1);
       verifyNoMoreInteractions(api.message);
+    });
+
+    test('`.enrichUrl`', () async {
+      const url =
+          'https://www.techyourchance.com/finite-state-machine-with-unit-tests-real-world-example';
+
+      when(() => api.general.enrichUrl(url)).thenAnswer(
+        (_) async => OGAttachmentResponse()
+          ..type = 'image'
+          ..ogScrapeUrl = url
+          ..authorName = 'TechYourChance'
+          ..title = 'Finite State Machine with Unit Tests: Real World Example',
+      );
+
+      final res = await client.enrichUrl(url);
+
+      expect(res, isNotNull);
+      expect(res.type, 'image');
+      expect(res.ogScrapeUrl, url);
+      expect(res.authorName, 'TechYourChance');
+      expect(
+        res.title,
+        'Finite State Machine with Unit Tests: Real World Example',
+      );
+
+      verify(() => api.general.enrichUrl(url)).called(1);
+      verifyNoMoreInteractions(api.general);
     });
 
     test(

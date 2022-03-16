@@ -2,20 +2,12 @@
 import 'dart:async';
 
 import 'package:collection/collection.dart';
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:jiffy/jiffy.dart';
 import 'package:stream_chat_flutter/scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:stream_chat_flutter/src/extension.dart';
-import 'package:stream_chat_flutter/src/info_tile.dart';
-import 'package:stream_chat_flutter/src/message_widget.dart';
-import 'package:stream_chat_flutter/src/stream_svg_icon.dart';
 import 'package:stream_chat_flutter/src/swipeable.dart';
-import 'package:stream_chat_flutter/src/system_message.dart';
-import 'package:stream_chat_flutter/src/theme/themes.dart';
 import 'package:stream_chat_flutter/stream_chat_flutter.dart';
-import 'package:stream_chat_flutter_core/stream_chat_flutter_core.dart';
 import 'package:visibility_detector/visibility_detector.dart';
 
 /// Widget builder for message
@@ -720,20 +712,21 @@ class _MessageListViewState extends State<MessageListView> {
             );
           },
         ),
-        BetterStreamBuilder<bool>(
-          stream: streamChannel!.channel.state!.isUpToDateStream,
-          initialData: streamChannel!.channel.state!.isUpToDate,
-          builder: (context, snapshot) => ValueListenableBuilder<bool>(
-            valueListenable: _showScrollToBottom,
-            child: _buildScrollToBottom(),
-            builder: (context, value, child) {
-              if (!snapshot || value) {
-                return child!;
-              }
-              return const Offstage();
-            },
+        if (widget.showScrollToBottom)
+          BetterStreamBuilder<bool>(
+            stream: streamChannel!.channel.state!.isUpToDateStream,
+            initialData: streamChannel!.channel.state!.isUpToDate,
+            builder: (context, snapshot) => ValueListenableBuilder<bool>(
+              valueListenable: _showScrollToBottom,
+              child: _buildScrollToBottom(),
+              builder: (context, value, child) {
+                if (!snapshot || value) {
+                  return child!;
+                }
+                return const Offstage();
+              },
+            ),
           ),
-        ),
         if (widget.showFloatingDateDivider)
           _buildFloatingDateDivider(itemCount),
       ],

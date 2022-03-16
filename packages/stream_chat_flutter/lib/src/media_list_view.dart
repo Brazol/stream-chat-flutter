@@ -5,7 +5,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:photo_manager/photo_manager.dart';
-import 'package:stream_chat_flutter/src/stream_svg_icon.dart';
 import 'package:stream_chat_flutter/stream_chat_flutter.dart';
 
 extension on Duration {
@@ -159,7 +158,10 @@ class _MediaListViewState extends State<MediaListView> {
     ))
         .firstOrNull;
 
-    final media = await assetList?.getAssetListPaged(_currentPage, 50);
+    final media = await assetList?.getAssetListPaged(
+      page: _currentPage,
+      size: 50,
+    );
 
     if (media?.isNotEmpty == true) {
       setState(() {
@@ -198,7 +200,7 @@ class MediaThumbnailProvider extends ImageProvider<MediaThumbnailProvider> {
     DecoderCallback decode,
   ) async {
     assert(key == this, 'Checks MediaThumbnailProvider');
-    final bytes = await media.thumbData;
+    final bytes = await media.thumbnailData;
 
     return decode(bytes!);
   }
