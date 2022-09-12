@@ -764,7 +764,7 @@ class _StreamMessageWidgetState extends State<StreamMessageWidget>
                                                     ),
                                                   )
                                                 : Card(
-                                                    clipBehavior: Clip.hardEdge,
+                                                    clipBehavior: Clip.none,
                                                     elevation: 0,
                                                     margin:
                                                         EdgeInsets.symmetric(
